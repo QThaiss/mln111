@@ -1,43 +1,62 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, XCircle, RotateCcw, Send, FileQuestion } from 'lucide-react'
+import { CheckCircle2, XCircle, RotateCcw, ChevronRight, FileQuestion, Play } from 'lucide-react'
 import { QUIZ_QUESTIONS } from '../data/content'
 
-export default function StudentSection() {
-  const [answers, setAnswers] = useState({})
-  const [isSubmitted, setIsSubmitted] = useState(false)
+// Quiz phases: 'idle' -> 'active' -> 'results'
+const TOTAL = QUIZ_QUESTIONS.length
 
-  const handleSelect = (qId, oId) => {
-    if (isSubmitted) return
-    setAnswers(prev => ({ ...prev, [qId]: oId }))
+export default function StudentSection() {
+  const [phase, setPhase] = useState('idle')      // 'idle' | 'active' | 'results'
+  const [currentIdx, setCurrentIdx] = useState(0)  // index of current question (0-based)
+  const [answers, setAnswers] = useState({})       // { questionId: selectedOptionId }
+
+  const currentQuestion = QUIZ_QUESTIONS[currentIdx]
+  const selectedOptId = answers[currentQuestion?.id]
+  const hasSelected = selectedOptId !== undefined
+  const isLastQuestion = currentIdx === TOTAL - 1
+
+  // --- Handlers ---
+  const handleStart = () => {
+    setPhase('active')
+    setCurrentIdx(0)
+    setAnswers({})
   }
 
-  const handleSubmit = () => {
-    setIsSubmitted(true)
-    // Optional: Scroll to results
-    setTimeout(() => {
-      document.getElementById('quiz-results')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, 100)
+  const handleSelect = (optId) => {
+    if (phase !== 'active') return
+    setAnswers(prev => ({ ...prev, [currentQuestion.id]: optId }))
+  }
+
+  const handleNext = () => {
+    if (!hasSelected) return
+    if (isLastQuestion) {
+      setPhase('results')
+      setTimeout(() => {
+        document.getElementById('quiz-results')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+    } else {
+      setCurrentIdx(prev => prev + 1)
+    }
   }
 
   const handleRetry = () => {
+    setPhase('idle')
+    setCurrentIdx(0)
     setAnswers({})
-    setIsSubmitted(false)
     document.getElementById('student')?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const answeredCount = Object.keys(answers).length
-
+  // --- Results calculation ---
   const results = useMemo(() => {
-    if (!isSubmitted) return null
+    if (phase !== 'results') return null
     let correct = 0
     QUIZ_QUESTIONS.forEach(q => {
       if (answers[q.id] === q.correctAnswer) correct++
     })
-    const total = QUIZ_QUESTIONS.length
-    const incorrect = total - correct
-    const percentage = Math.round((correct / total) * 100)
-    
+    const incorrect = TOTAL - correct
+    const percentage = Math.round((correct / TOTAL) * 100)
+
     let message = ""
     let colorClass = ""
     if (percentage >= 80) {
@@ -51,9 +70,10 @@ export default function StudentSection() {
       colorClass = "text-[var(--color-red-bright)]"
     }
 
-    return { correct, incorrect, total, percentage, message, colorClass }
-  }, [answers, isSubmitted])
+    return { correct, incorrect, total: TOTAL, percentage, message, colorClass }
+  }, [answers, phase])
 
+  // --- Render ---
   return (
     <section
       className="py-[clamp(80px,12vh,140px)] px-0 relative overflow-hidden"
@@ -92,164 +112,273 @@ export default function StudentSection() {
             viewport={{ once: true }}
             transition={{ delay: 0.2 }}
           >
-            Mời bạn hoàn thành 20 câu hỏi trắc nghiệm dưới đây để tự đánh giá mức độ hiểu bài. Bạn có thể nộp bài bất cứ lúc nào (câu chưa chọn sẽ bị tính là sai).
+            {phase === 'idle' && 'Kiểm tra kiến thức của bạn với 20 câu hỏi trắc nghiệm. Đáp án sẽ được chấm sau khi bạn hoàn thành toàn bộ bài quiz.'}
+            {phase === 'active' && 'Chọn đáp án bạn cho là đúng rồi bấm tiếp tục. Kết quả sẽ được tính sau khi hoàn thành tất cả câu hỏi.'}
+            {phase === 'results' && 'Dưới đây là kết quả chi tiết bài quiz của bạn.'}
           </motion.p>
-          
-          {/* Progress Badge */}
-          <motion.div 
-            className="mt-6 inline-flex items-center gap-2 bg-[var(--color-surface-2)] border border-[rgba(255,255,255,0.05)] px-4 py-2 rounded-xl text-sm font-semibold text-[#e8e4dc]"
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.3 }}
-          >
-            <FileQuestion size={18} className="text-[var(--color-future-blue)]" />
-            Đã chọn: <span className="text-[var(--color-future-blue)]">{answeredCount}</span> / 20
-          </motion.div>
         </div>
 
-        {/* Quiz Container */}
-        <div className="space-y-8 mb-12">
-          {QUIZ_QUESTIONS.map((q, idx) => {
-            const selectedOptId = answers[q.id]
-            
-            return (
-              <motion.div 
-                key={q.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.5, delay: idx * 0.05 > 0.5 ? 0 : idx * 0.05 }}
-                className="bg-[var(--color-surface-1)] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6 md:p-8"
-              >
+        {/* ====== PHASE: IDLE — Start Screen ====== */}
+        <AnimatePresence mode="wait">
+          {phase === 'idle' && (
+            <motion.div
+              key="start-screen"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.5 }}
+              className="text-center"
+            >
+              <div className="bg-[var(--color-surface-1)] border border-[rgba(59,130,246,0.15)] rounded-3xl p-10 md:p-14 max-w-[520px] mx-auto">
+                <div className="w-20 h-20 rounded-full bg-[rgba(59,130,246,0.1)] border border-[rgba(59,130,246,0.2)] flex items-center justify-center mx-auto mb-8">
+                  <FileQuestion size={36} className="text-[var(--color-future-blue)]" />
+                </div>
+                <h3 className="font-[var(--font-display)] text-2xl font-bold text-[#e8e4dc] mb-3">
+                  Sẵn sàng chưa?
+                </h3>
+                <p className="text-[#9a9588] mb-2 text-sm">
+                  {TOTAL} câu hỏi trắc nghiệm • Không giới hạn thời gian
+                </p>
+                <p className="text-[#9a9588] mb-8 text-sm">
+                  Kết quả chỉ hiển thị sau khi hoàn thành toàn bộ bài quiz.
+                </p>
+                <button
+                  onClick={handleStart}
+                  className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-br from-[var(--color-future-blue)] to-[#2563eb] text-white font-bold text-lg rounded-xl hover:-translate-y-1 shadow-lg hover:shadow-[0_10px_30px_rgba(59,130,246,0.3)] transition-all duration-300"
+                >
+                  <Play size={22} />
+                  Bắt đầu làm Quiz
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ====== PHASE: ACTIVE — One Question at a Time ====== */}
+          {phase === 'active' && (
+            <motion.div
+              key={`question-${currentIdx}`}
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -40 }}
+              transition={{ duration: 0.4 }}
+            >
+              {/* Progress bar */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-[#9a9588]">
+                    Câu <span className="text-[var(--color-future-blue)]">{currentIdx + 1}</span> / {TOTAL}
+                  </span>
+                  <span className="text-sm font-semibold text-[#9a9588]">
+                    {Math.round(((currentIdx + 1) / TOTAL) * 100)}%
+                  </span>
+                </div>
+                <div className="h-2 bg-[var(--color-surface-2)] rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-gradient-to-r from-[var(--color-future-blue)] to-[#2563eb] rounded-full"
+                    initial={{ width: `${(currentIdx / TOTAL) * 100}%` }}
+                    animate={{ width: `${((currentIdx + 1) / TOTAL) * 100}%` }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
+                  />
+                </div>
+              </div>
+
+              {/* Question card */}
+              <div className="bg-[var(--color-surface-1)] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6 md:p-8 mb-8">
                 <h4 className="font-bold text-lg md:text-xl text-[#e8e4dc] mb-6 leading-relaxed">
-                  <span className="text-[var(--color-future-blue)] mr-2 font-[var(--font-display)]">Câu {idx + 1}.</span>
-                  {q.question}
+                  <span className="text-[var(--color-future-blue)] mr-2 font-[var(--font-display)]">Câu {currentIdx + 1}.</span>
+                  {currentQuestion.question}
                 </h4>
                 <div className="space-y-3">
-                  {q.options.map((opt) => {
+                  {currentQuestion.options.map((opt) => {
                     const isSelected = selectedOptId === opt.id
-                    const isCorrect = q.correctAnswer === opt.id
-                    
-                    let bgClass = "bg-[var(--color-surface-2)] border-[rgba(255,255,255,0.05)]"
-                    let textClass = "text-[#9a9588]"
-                    let icon = null
 
-                    if (isSubmitted) {
-                      if (isCorrect) {
-                        // Highlight the correct answer green regardless of selection
-                        bgClass = "bg-[rgba(45,143,94,0.15)] border-[var(--color-vn-green)]"
-                        textClass = "text-[var(--color-vn-bright)]"
-                        icon = <CheckCircle2 className="w-5 h-5 ml-auto text-[var(--color-vn-green)] shrink-0" />
-                      } else if (isSelected && !isCorrect) {
-                        // Highlight wrong choice red
-                        bgClass = "bg-[rgba(184,48,48,0.15)] border-[var(--color-red)]"
-                        textClass = "text-[var(--color-red-bright)]"
-                        icon = <XCircle className="w-5 h-5 ml-auto text-[var(--color-red)] shrink-0" />
-                      } else {
-                        // Dim other choices
-                        bgClass = "bg-[var(--color-surface-2)] border-[rgba(255,255,255,0.02)] opacity-40"
-                      }
-                    } else {
-                      if (isSelected) {
-                        bgClass = "bg-[rgba(59,130,246,0.15)] border-[var(--color-future-blue)]"
-                        textClass = "text-[#e8e4dc]"
-                      } else {
-                        bgClass = "hover:border-[rgba(59,130,246,0.4)] hover:bg-[rgba(59,130,246,0.05)] cursor-pointer"
-                        textClass = "hover:text-[#e8e4dc]"
-                      }
-                    }
+                    const bgClass = isSelected
+                      ? "bg-[rgba(59,130,246,0.15)] border-[var(--color-future-blue)]"
+                      : "bg-[var(--color-surface-2)] border-[rgba(255,255,255,0.05)] hover:border-[rgba(59,130,246,0.4)] hover:bg-[rgba(59,130,246,0.05)] cursor-pointer"
+
+                    const textClass = isSelected
+                      ? "text-[#e8e4dc]"
+                      : "text-[#9a9588] hover:text-[#e8e4dc]"
 
                     return (
-                      <div 
+                      <div
                         key={opt.id}
-                        onClick={() => handleSelect(q.id, opt.id)}
-                        className={`flex items-start p-4 rounded-xl border transition-all duration-200 ${bgClass}`}
+                        onClick={() => handleSelect(opt.id)}
+                        className={`flex items-start p-4 rounded-xl border transition-all duration-200 cursor-pointer ${bgClass}`}
                       >
                         <div className={`mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center mr-4 shrink-0 transition-colors ${
-                          isSelected && !isSubmitted 
-                            ? 'border-[var(--color-future-blue)] bg-[var(--color-future-blue)]' 
-                            : isSubmitted && isCorrect
-                              ? 'border-[var(--color-vn-green)] bg-[var(--color-vn-green)]'
-                              : isSubmitted && isSelected && !isCorrect
-                                ? 'border-[var(--color-red)] bg-[var(--color-red)]'
-                                : 'border-[rgba(255,255,255,0.2)]'
+                          isSelected
+                            ? 'border-[var(--color-future-blue)] bg-[var(--color-future-blue)]'
+                            : 'border-[rgba(255,255,255,0.2)]'
                         }`}>
-                          {(isSelected || (isSubmitted && isCorrect)) && <div className="w-2 h-2 rounded-full bg-[var(--color-bg-deep)]" />}
+                          {isSelected && <div className="w-2 h-2 rounded-full bg-[var(--color-bg-deep)]" />}
                         </div>
                         <span className={`font-medium text-[0.95rem] leading-relaxed ${textClass}`}>
                           <span className="mr-2 font-bold">{opt.id}.</span>
                           {opt.text}
                         </span>
-                        {icon}
                       </div>
                     )
                   })}
                 </div>
-              </motion.div>
-            )
-          })}
-        </div>
+              </div>
 
-        {/* Submit Button & Results */}
-        <AnimatePresence mode="wait">
-          {!isSubmitted ? (
-            <motion.div 
-              key="submit-btn"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="text-center"
-            >
-              <button 
-                onClick={handleSubmit}
-                className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-br from-[var(--color-future-blue)] to-[#2563eb] text-white font-bold rounded-xl hover:-translate-y-1 shadow-lg hover:shadow-[0_10px_30px_rgba(59,130,246,0.3)] transition-all duration-300"
-              >
-                <Send size={20} />
-                Nộp bài đánh giá
-              </button>
+              {/* Next / Finish button */}
+              <div className="text-center">
+                <button
+                  onClick={handleNext}
+                  disabled={!hasSelected}
+                  className={`inline-flex items-center gap-2 px-8 py-4 font-bold rounded-xl transition-all duration-300 ${
+                    hasSelected
+                      ? 'bg-gradient-to-br from-[var(--color-future-blue)] to-[#2563eb] text-white hover:-translate-y-1 shadow-lg hover:shadow-[0_10px_30px_rgba(59,130,246,0.3)]'
+                      : 'bg-[var(--color-surface-2)] text-[#555] cursor-not-allowed border border-[rgba(255,255,255,0.05)]'
+                  }`}
+                >
+                  {isLastQuestion ? 'Hoàn thành & Xem kết quả' : 'Câu tiếp theo'}
+                  <ChevronRight size={20} />
+                </button>
+              </div>
             </motion.div>
-          ) : (
-            <motion.div 
-              id="quiz-results"
+          )}
+
+          {/* ====== PHASE: RESULTS ====== */}
+          {phase === 'results' && results && (
+            <motion.div
               key="results"
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-[var(--color-surface-1)] border border-[var(--color-future-blue)] rounded-3xl p-8 md:p-12 text-center relative overflow-hidden shadow-[0_0_50px_rgba(59,130,246,0.1)]"
+              transition={{ duration: 0.6 }}
             >
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[var(--color-future-blue)] to-transparent" />
-              
-              <h3 className="font-[var(--font-display)] text-3xl font-bold text-[#e8e4dc] mb-2">Kết quả của bạn</h3>
-              <p className={`font-bold text-lg mb-8 ${results.colorClass}`}>
-                {results.message}
-              </p>
+              {/* Score card */}
+              <div
+                id="quiz-results"
+                className="bg-[var(--color-surface-1)] border border-[var(--color-future-blue)] rounded-3xl p-8 md:p-12 text-center relative overflow-hidden shadow-[0_0_50px_rgba(59,130,246,0.1)] mb-10"
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[var(--color-future-blue)] to-transparent" />
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-                <div className="bg-[var(--color-surface-2)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
-                  <div className="text-3xl font-black text-[var(--color-future-blue)] mb-1">{results.total}</div>
-                  <div className="text-xs text-[#9a9588] uppercase tracking-wider">Tổng số câu</div>
+                <h3 className="font-[var(--font-display)] text-3xl font-bold text-[#e8e4dc] mb-2">Kết quả của bạn</h3>
+                <p className={`font-bold text-lg mb-8 ${results.colorClass}`}>
+                  {results.message}
+                </p>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+                  <div className="bg-[var(--color-surface-2)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
+                    <div className="text-3xl font-black text-[var(--color-future-blue)] mb-1">{results.total}</div>
+                    <div className="text-xs text-[#9a9588] uppercase tracking-wider">Tổng số câu</div>
+                  </div>
+                  <div className="bg-[rgba(45,143,94,0.1)] p-4 rounded-xl border border-[rgba(45,143,94,0.2)]">
+                    <div className="text-3xl font-black text-[var(--color-vn-bright)] mb-1">{results.correct}</div>
+                    <div className="text-xs text-[var(--color-vn-green)] uppercase tracking-wider">Câu đúng</div>
+                  </div>
+                  <div className="bg-[rgba(184,48,48,0.1)] p-4 rounded-xl border border-[rgba(184,48,48,0.2)]">
+                    <div className="text-3xl font-black text-[var(--color-red-bright)] mb-1">{results.incorrect}</div>
+                    <div className="text-xs text-[var(--color-red)] uppercase tracking-wider">Câu sai</div>
+                  </div>
+                  <div className="bg-[var(--color-surface-2)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
+                    <div className="text-3xl font-black text-[#e8e4dc] mb-1">{results.percentage}%</div>
+                    <div className="text-xs text-[#9a9588] uppercase tracking-wider">Tỷ lệ chính xác</div>
+                  </div>
                 </div>
-                <div className="bg-[rgba(45,143,94,0.1)] p-4 rounded-xl border border-[rgba(45,143,94,0.2)]">
-                  <div className="text-3xl font-black text-[var(--color-vn-bright)] mb-1">{results.correct}</div>
-                  <div className="text-xs text-[var(--color-vn-green)] uppercase tracking-wider">Câu đúng</div>
-                </div>
-                <div className="bg-[rgba(184,48,48,0.1)] p-4 rounded-xl border border-[rgba(184,48,48,0.2)]">
-                  <div className="text-3xl font-black text-[var(--color-red-bright)] mb-1">{results.incorrect}</div>
-                  <div className="text-xs text-[var(--color-red)] uppercase tracking-wider">Câu sai / Bỏ trống</div>
-                </div>
-                <div className="bg-[var(--color-surface-2)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
-                  <div className="text-3xl font-black text-[#e8e4dc] mb-1">{results.percentage}%</div>
-                  <div className="text-xs text-[#9a9588] uppercase tracking-wider">Tỷ lệ chính xác</div>
-                </div>
+
+                <button
+                  onClick={handleRetry}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-surface-2)] border border-[rgba(255,255,255,0.1)] text-[#e8e4dc] font-semibold rounded-xl hover:bg-[var(--color-surface-1)] hover:border-[var(--color-future-blue)] hover:text-[var(--color-future-blue)] transition-all duration-300"
+                >
+                  <RotateCcw size={18} />
+                  Làm lại Quiz
+                </button>
               </div>
 
-              <button 
-                onClick={handleRetry}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-surface-2)] border border-[rgba(255,255,255,0.1)] text-[#e8e4dc] font-semibold rounded-xl hover:bg-[var(--color-surface-1)] hover:border-[var(--color-future-blue)] hover:text-[var(--color-future-blue)] transition-all duration-300"
-              >
-                <RotateCcw size={18} />
-                Làm lại Quiz
-              </button>
+              {/* Detail review — show all questions with correct/wrong highlights */}
+              <div className="space-y-6">
+                <h3 className="font-[var(--font-display)] text-xl font-bold text-[#e8e4dc] text-center mb-2">
+                  Xem lại chi tiết
+                </h3>
+                {QUIZ_QUESTIONS.map((q, idx) => {
+                  const userAnswer = answers[q.id]
+                  const isCorrectAnswer = userAnswer === q.correctAnswer
+
+                  return (
+                    <motion.div
+                      key={q.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: idx * 0.03 }}
+                      className={`bg-[var(--color-surface-1)] border rounded-2xl p-6 md:p-8 ${
+                        isCorrectAnswer
+                          ? 'border-[rgba(45,143,94,0.3)]'
+                          : 'border-[rgba(184,48,48,0.3)]'
+                      }`}
+                    >
+                      <h4 className="font-bold text-lg text-[#e8e4dc] mb-4 leading-relaxed flex items-start gap-2">
+                        <span className="shrink-0 mt-0.5">
+                          {isCorrectAnswer
+                            ? <CheckCircle2 className="w-5 h-5 text-[var(--color-vn-green)]" />
+                            : <XCircle className="w-5 h-5 text-[var(--color-red)]" />
+                          }
+                        </span>
+                        <span>
+                          <span className="text-[var(--color-future-blue)] mr-2 font-[var(--font-display)]">Câu {idx + 1}.</span>
+                          {q.question}
+                        </span>
+                      </h4>
+                      <div className="space-y-2">
+                        {q.options.map((opt) => {
+                          const isUserChoice = userAnswer === opt.id
+                          const isCorrect = q.correctAnswer === opt.id
+
+                          let bgClass = "bg-[var(--color-surface-2)] border-[rgba(255,255,255,0.02)] opacity-40"
+                          let textClass = "text-[#9a9588]"
+                          let icon = null
+
+                          if (isCorrect) {
+                            bgClass = "bg-[rgba(45,143,94,0.15)] border-[var(--color-vn-green)]"
+                            textClass = "text-[var(--color-vn-bright)]"
+                            icon = <CheckCircle2 className="w-5 h-5 ml-auto text-[var(--color-vn-green)] shrink-0" />
+                          } else if (isUserChoice && !isCorrect) {
+                            bgClass = "bg-[rgba(184,48,48,0.15)] border-[var(--color-red)]"
+                            textClass = "text-[var(--color-red-bright)]"
+                            icon = <XCircle className="w-5 h-5 ml-auto text-[var(--color-red)] shrink-0" />
+                          }
+
+                          return (
+                            <div
+                              key={opt.id}
+                              className={`flex items-start p-3 rounded-xl border transition-all duration-200 ${bgClass}`}
+                            >
+                              <div className={`mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center mr-4 shrink-0 ${
+                                isCorrect
+                                  ? 'border-[var(--color-vn-green)] bg-[var(--color-vn-green)]'
+                                  : isUserChoice && !isCorrect
+                                    ? 'border-[var(--color-red)] bg-[var(--color-red)]'
+                                    : 'border-[rgba(255,255,255,0.2)]'
+                              }`}>
+                                {(isUserChoice || isCorrect) && <div className="w-2 h-2 rounded-full bg-[var(--color-bg-deep)]" />}
+                              </div>
+                              <span className={`font-medium text-[0.95rem] leading-relaxed ${textClass}`}>
+                                <span className="mr-2 font-bold">{opt.id}.</span>
+                                {opt.text}
+                              </span>
+                              {icon}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+
+              {/* Bottom retry button */}
+              <div className="text-center mt-10">
+                <button
+                  onClick={handleRetry}
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-br from-[var(--color-future-blue)] to-[#2563eb] text-white font-bold rounded-xl hover:-translate-y-1 shadow-lg hover:shadow-[0_10px_30px_rgba(59,130,246,0.3)] transition-all duration-300"
+                >
+                  <RotateCcw size={18} />
+                  Làm lại Quiz
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
