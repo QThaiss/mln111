@@ -43,8 +43,32 @@ export default function Navbar() {
     >
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
-        <a href="#hero" className="font-[var(--font-cinzel)] text-lg font-bold tracking-[2px] text-[#e8e4dc]">
-          Dòng Chảy <span className="text-[var(--color-accent)]">Lịch Sử</span>
+        <a href="#hero" onClick={(e) => handleNav(e, '#hero')} className="flex items-center gap-2.5 font-[var(--font-cinzel)] text-lg font-bold tracking-[2px] text-[#e8e4dc] group">
+          <svg width="30" height="30" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0 transition-transform duration-300 group-hover:scale-110">
+            <defs>
+              <linearGradient id="navGold" x1="0" y1="1" x2="0" y2="0">
+                <stop offset="0%" stopColor="#a07e2e"/>
+                <stop offset="50%" stopColor="#c8a04a"/>
+                <stop offset="100%" stopColor="#e4c36a"/>
+              </linearGradient>
+              <linearGradient id="navRed" x1="0" y1="1" x2="0.3" y2="0">
+                <stop offset="0%" stopColor="#8a2020"/>
+                <stop offset="100%" stopColor="#e05050"/>
+              </linearGradient>
+            </defs>
+            {/* Three streams */}
+            <path d="M168 380 Q180 320 200 280 Q220 240 240 200 Q250 175 256 150" stroke="url(#navGold)" strokeWidth="12" strokeLinecap="round" fill="none" opacity="0.5"/>
+            <path d="M256 400 Q256 340 256 280 Q256 220 256 150" stroke="url(#navGold)" strokeWidth="16" strokeLinecap="round" fill="none" opacity="0.7"/>
+            <path d="M344 380 Q332 320 312 280 Q292 240 272 200 Q262 175 256 150" stroke="url(#navGold)" strokeWidth="12" strokeLinecap="round" fill="none" opacity="0.5"/>
+            {/* Flame */}
+            <path d="M256 160 Q236 130 240 105 Q244 75 256 52 Q268 75 272 105 Q276 130 256 160Z" fill="url(#navRed)" opacity="0.9"/>
+            <path d="M256 148 Q248 130 250 112 Q253 90 256 72 Q259 90 262 112 Q264 130 256 148Z" fill="#e4c36a" opacity="0.8"/>
+            {/* Figures */}
+            <circle cx="196" cy="330" r="18" fill="url(#navGold)" opacity="0.85"/>
+            <circle cx="256" cy="310" r="22" fill="url(#navGold)"/>
+            <circle cx="316" cy="330" r="18" fill="url(#navGold)" opacity="0.85"/>
+          </svg>
+          <span>Dòng Chảy <span className="text-[var(--color-accent)]">Lịch Sử</span></span>
         </a>
 
         {/* Desktop nav */}
