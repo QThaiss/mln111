@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, XCircle, RotateCcw, ChevronRight, FileQuestion, Play } from 'lucide-react'
+import { CheckCircle2, XCircle, RotateCcw, ChevronRight, FileQuestion, Play, AlertCircle } from 'lucide-react'
 import { QUIZ_QUESTIONS } from '../data/content'
 
 // Quiz phases: 'idle' -> 'active' -> 'results'
@@ -10,10 +10,12 @@ export default function StudentSection() {
   const [phase, setPhase] = useState('idle')      // 'idle' | 'active' | 'results'
   const [currentIdx, setCurrentIdx] = useState(0)  // index of current question (0-based)
   const [answers, setAnswers] = useState({})       // { questionId: selectedOptionId }
+  const [revealed, setRevealed] = useState(false)   // whether the answer feedback is shown
 
   const currentQuestion = QUIZ_QUESTIONS[currentIdx]
   const selectedOptId = answers[currentQuestion?.id]
   const hasSelected = selectedOptId !== undefined
+  const isAnswerCorrect = hasSelected && selectedOptId === currentQuestion?.correctAnswer
   const isLastQuestion = currentIdx === TOTAL - 1
 
   // --- Handlers ---
@@ -21,21 +23,25 @@ export default function StudentSection() {
     setPhase('active')
     setCurrentIdx(0)
     setAnswers({})
+    setRevealed(false)
   }
 
   const handleSelect = (optId) => {
-    if (phase !== 'active') return
+    if (phase !== 'active' || revealed) return // prevent changing answer after reveal
     setAnswers(prev => ({ ...prev, [currentQuestion.id]: optId }))
+    setRevealed(true)
   }
 
   const handleNext = () => {
-    if (!hasSelected) return
+    if (!revealed) return
     if (isLastQuestion) {
       setPhase('results')
+      setRevealed(false)
       setTimeout(() => {
         document.getElementById('quiz-results')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }, 100)
     } else {
+      setRevealed(false)
       setCurrentIdx(prev => prev + 1)
     }
   }
@@ -44,6 +50,7 @@ export default function StudentSection() {
     setPhase('idle')
     setCurrentIdx(0)
     setAnswers({})
+    setRevealed(false)
     document.getElementById('student')?.scrollIntoView({ behavior: 'smooth' })
   }
 
@@ -112,8 +119,8 @@ export default function StudentSection() {
             viewport={{ once: true }}
             transition={{ delay: 0.2 }}
           >
-            {phase === 'idle' && 'Kiểm tra kiến thức của bạn với 20 câu hỏi trắc nghiệm. Đáp án sẽ được chấm sau khi bạn hoàn thành toàn bộ bài quiz.'}
-            {phase === 'active' && 'Chọn đáp án bạn cho là đúng rồi bấm tiếp tục. Kết quả sẽ được tính sau khi hoàn thành tất cả câu hỏi.'}
+            {phase === 'idle' && 'Kiểm tra kiến thức của bạn với 20 câu hỏi trắc nghiệm. Kết quả mỗi câu sẽ hiển thị ngay sau khi bạn chọn đáp án.'}
+            {phase === 'active' && 'Chọn đáp án bạn cho là đúng. Kết quả sẽ hiển thị ngay lập tức.'}
             {phase === 'results' && 'Dưới đây là kết quả chi tiết bài quiz của bạn.'}
           </motion.p>
         </div>
@@ -140,7 +147,7 @@ export default function StudentSection() {
                   {TOTAL} câu hỏi trắc nghiệm • Không giới hạn thời gian
                 </p>
                 <p className="text-[#9a9588] mb-8 text-sm">
-                  Kết quả chỉ hiển thị sau khi hoàn thành toàn bộ bài quiz.
+                  Kết quả mỗi câu sẽ hiển thị ngay sau khi bạn chọn đáp án.
                 </p>
                 <button
                   onClick={handleStart}
@@ -191,45 +198,104 @@ export default function StudentSection() {
                 <div className="space-y-3">
                   {currentQuestion.options.map((opt) => {
                     const isSelected = selectedOptId === opt.id
+                    const isCorrectOpt = opt.id === currentQuestion.correctAnswer
 
-                    const bgClass = isSelected
-                      ? "bg-[rgba(59,130,246,0.15)] border-[var(--color-future-blue)]"
-                      : "bg-[var(--color-surface-2)] border-[rgba(255,255,255,0.05)] hover:border-[rgba(59,130,246,0.4)] hover:bg-[rgba(59,130,246,0.05)] cursor-pointer"
+                    // Determine styling based on reveal state
+                    let bgClass, textClass, radioClass, icon = null
 
-                    const textClass = isSelected
-                      ? "text-[#e8e4dc]"
-                      : "text-[#9a9588] hover:text-[#e8e4dc]"
+                    if (revealed) {
+                      if (isCorrectOpt) {
+                        // Always highlight the correct answer in green
+                        bgClass = "bg-[rgba(45,143,94,0.15)] border-[var(--color-vn-green)]"
+                        textClass = "text-[var(--color-vn-bright)]"
+                        radioClass = "border-[var(--color-vn-green)] bg-[var(--color-vn-green)]"
+                        icon = <CheckCircle2 className="w-5 h-5 ml-auto text-[var(--color-vn-green)] shrink-0" />
+                      } else if (isSelected && !isCorrectOpt) {
+                        // User's wrong choice in red
+                        bgClass = "bg-[rgba(184,48,48,0.15)] border-[var(--color-red)]"
+                        textClass = "text-[var(--color-red-bright)]"
+                        radioClass = "border-[var(--color-red)] bg-[var(--color-red)]"
+                        icon = <XCircle className="w-5 h-5 ml-auto text-[var(--color-red)] shrink-0" />
+                      } else {
+                        // Unselected, non-correct options dimmed
+                        bgClass = "bg-[var(--color-surface-2)] border-[rgba(255,255,255,0.02)] opacity-40"
+                        textClass = "text-[#9a9588]"
+                        radioClass = "border-[rgba(255,255,255,0.2)]"
+                      }
+                    } else {
+                      // Not revealed yet — normal interactive state
+                      bgClass = isSelected
+                        ? "bg-[rgba(59,130,246,0.15)] border-[var(--color-future-blue)]"
+                        : "bg-[var(--color-surface-2)] border-[rgba(255,255,255,0.05)] hover:border-[rgba(59,130,246,0.4)] hover:bg-[rgba(59,130,246,0.05)] cursor-pointer"
+                      textClass = isSelected
+                        ? "text-[#e8e4dc]"
+                        : "text-[#9a9588] hover:text-[#e8e4dc]"
+                      radioClass = isSelected
+                        ? "border-[var(--color-future-blue)] bg-[var(--color-future-blue)]"
+                        : "border-[rgba(255,255,255,0.2)]"
+                    }
 
                     return (
                       <div
                         key={opt.id}
                         onClick={() => handleSelect(opt.id)}
-                        className={`flex items-start p-4 rounded-xl border transition-all duration-200 cursor-pointer ${bgClass}`}
+                        className={`flex items-center p-4 rounded-xl border transition-all duration-200 ${revealed ? '' : 'cursor-pointer'} ${bgClass}`}
                       >
-                        <div className={`mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center mr-4 shrink-0 transition-colors ${
-                          isSelected
-                            ? 'border-[var(--color-future-blue)] bg-[var(--color-future-blue)]'
-                            : 'border-[rgba(255,255,255,0.2)]'
-                        }`}>
-                          {isSelected && <div className="w-2 h-2 rounded-full bg-[var(--color-bg-deep)]" />}
+                        <div className={`mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center mr-4 shrink-0 transition-colors ${radioClass}`}>
+                          {(isSelected || (revealed && isCorrectOpt)) && <div className="w-2 h-2 rounded-full bg-[var(--color-bg-deep)]" />}
                         </div>
                         <span className={`font-medium text-[0.95rem] leading-relaxed ${textClass}`}>
                           <span className="mr-2 font-bold">{opt.id}.</span>
                           {opt.text}
                         </span>
+                        {icon}
                       </div>
                     )
                   })}
                 </div>
               </div>
 
+              {/* Answer feedback banner */}
+              <AnimatePresence>
+                {revealed && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    className={`flex items-center gap-3 p-4 rounded-xl border mb-6 ${
+                      isAnswerCorrect
+                        ? 'bg-[rgba(45,143,94,0.12)] border-[rgba(45,143,94,0.3)]'
+                        : 'bg-[rgba(184,48,48,0.12)] border-[rgba(184,48,48,0.3)]'
+                    }`}
+                  >
+                    {isAnswerCorrect
+                      ? <CheckCircle2 className="w-6 h-6 text-[var(--color-vn-green)] shrink-0" />
+                      : <AlertCircle className="w-6 h-6 text-[var(--color-red)] shrink-0" />
+                    }
+                    <div>
+                      <p className={`font-bold text-base ${
+                        isAnswerCorrect ? 'text-[var(--color-vn-bright)]' : 'text-[var(--color-red-bright)]'
+                      }`}>
+                        {isAnswerCorrect ? 'Chính xác!' : 'Chưa đúng!'}
+                      </p>
+                      {!isAnswerCorrect && (
+                        <p className="text-sm text-[#9a9588] mt-1">
+                          Đáp án đúng: <span className="text-[var(--color-vn-bright)] font-semibold">{currentQuestion.correctAnswer}</span>
+                        </p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Next / Finish button */}
               <div className="text-center">
                 <button
                   onClick={handleNext}
-                  disabled={!hasSelected}
+                  disabled={!revealed}
                   className={`inline-flex items-center gap-2 px-8 py-4 font-bold rounded-xl transition-all duration-300 ${
-                    hasSelected
+                    revealed
                       ? 'bg-gradient-to-br from-[var(--color-future-blue)] to-[#2563eb] text-white hover:-translate-y-1 shadow-lg hover:shadow-[0_10px_30px_rgba(59,130,246,0.3)]'
                       : 'bg-[var(--color-surface-2)] text-[#555] cursor-not-allowed border border-[rgba(255,255,255,0.05)]'
                   }`}
